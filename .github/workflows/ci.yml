@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint-and-parse:
+    name: Lint + DAG parse + dbt parse
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.11"
+      AIRFLOW_VERSION: "2.9.1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Ruff (lint)
+          pip install ruff==0.4.4
+          # Airflow (avec constraints pour build reproductible)
+          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+          pip install "apache-airflow==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
+          # Dépendances projet (extract + snowflake load)
+          pip install -r requirements-airflow.txt
+
+      - name: Lint (ruff)
+        run: |
+          ruff check --select E,F --ignore E501 \
+            ingestion/ spark/ snowflake_load/ dags/
+
+      - name: Parse Airflow DAG
+        env:
+          PROJECT_HOST_PATH: /tmp/ci-dummy
+          DOCKER_NETWORK: ci_default
+          AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+          AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -c "
+          from airflow.models import DagBag
+          dagbag = DagBag(dag_folder='dags', include_examples=False)
+          if dagbag.import_errors:
+              for path, err in dagbag.import_errors.items():
+                  print(f'IMPORT ERROR in {path}:')
+                  print(err)
+              raise SystemExit(1)
+          print(f'OK: {len(dagbag.dags)} DAG(s) parsed cleanly')
+          for dag_id in dagbag.dags:
+              print(f'  - {dag_id} ({len(dagbag.dags[dag_id].tasks)} tasks)')
+          "
+
+      - name: Parse DBT project
+        env:
+          DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+          SNOWFLAKE_ACCOUNT: ci-dummy
+          SNOWFLAKE_USER: ci-dummy
+          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/ci-dummy.p8
+          SNOWFLAKE_DATABASE: TMDB_DW
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+          SNOWFLAKE_ROLE: PIPELINE_ROLE
+        run: |
+          cd dbt
+          dbt deps
+          dbt parse

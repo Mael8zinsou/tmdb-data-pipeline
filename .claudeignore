@@ -1,0 +1,46 @@
+# Données brutes & lake local
+data/raw/**
+data/staging/**
+data/curated/**
+*.parquet
+*.snappy.parquet
+
+# Logs Airflow
+logs/**
+airflow/logs/**
+
+# Environnements Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Docker volumes persistés
+volumes/
+minio_data/
+postgres_data/
+
+# Secrets & config sensibles
+.env
+*.env
+profiles.yml
+secrets/
+config/keys/
+*.p8
+*.pem
+
+# DBT artifacts générés
+dbt/target/
+dbt/dbt_packages/
+dbt/.dbt/
+
+# Fichiers lourds / binaires
+*.jar
+*.zip
+*.gz
+*.tar
+
+# PDF du sujet (déjà lu)
+*.pdf

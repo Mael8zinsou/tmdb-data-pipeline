@@ -1,0 +1,58 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Données brutes chargées depuis le Data Lake (MinIO) via COPY INTO."
+    database: TMDB_DW
+    schema: RAW
+    tables:
+      - name: movies_enriched
+        description: "Films enrichis (jointure langue + colonnes dérivées) produits par Spark curated."
+        columns:
+          - name: movie_id
+            description: "Identifiant TMDB du film."
+            tests:
+              - unique
+              - not_null
+          - name: title
+          - name: release_date
+          - name: popularity
+          - name: vote_average
+          - name: vote_count
+
+      - name: dim_genre
+        description: "Référentiel TMDB des genres."
+        columns:
+          - name: genre_id
+            tests:
+              - unique
+              - not_null
+          - name: genre_name
+            tests:
+              - not_null
+
+      - name: dim_country
+        description: "Référentiel TMDB des pays."
+        columns:
+          - name: country_code
+            tests:
+              - unique
+              - not_null
+
+      - name: dim_language
+        description: "Référentiel TMDB des langues."
+        columns:
+          - name: language_code
+            tests:
+              - unique
+              - not_null
+
+      - name: movie_genres
+        description: "Pont N-N film ↔ genre (relation explosée par Spark)."
+        columns:
+          - name: movie_id
+            tests:
+              - not_null
+          - name: genre_id
+            tests:
+              - not_null

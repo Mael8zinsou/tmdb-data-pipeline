@@ -1,0 +1,143 @@
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
+  image: tmdb-airflow:local
+  user: "0:0"   # root pour avoir accès au socket Docker (dev local uniquement)
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ""
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+
+    # Project paths
+    PYTHONPATH: /opt/airflow
+    PROJECT_HOST_PATH: ${PROJECT_HOST_PATH}
+    DOCKER_NETWORK: ${DOCKER_NETWORK:-finalpipelinev1_default}
+
+    # TMDB
+    TMDB_API_KEY: ${TMDB_API_KEY}
+    TMDB_MAX_PAGES: ${TMDB_MAX_PAGES:-3}
+
+    # MinIO / S3 (vu depuis les containers)
+    MINIO_ENDPOINT: http://minio:9000
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    MINIO_BUCKET: ${MINIO_BUCKET:-tmdb-lake}
+
+    # Snowflake (auth par paire de clés RSA)
+    SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+    SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+    SNOWFLAKE_PRIVATE_KEY_PATH: /opt/airflow/${SNOWFLAKE_PRIVATE_KEY_PATH:-config/keys/snowflake_rsa_key.p8}
+    SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE:-TMDB_DW}
+    SNOWFLAKE_SCHEMA: ${SNOWFLAKE_SCHEMA:-RAW}
+    SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}
+    SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE:-PIPELINE_ROLE}
+
+    # DBT
+    DBT_PROFILES_DIR: /opt/airflow/dbt
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./ingestion:/opt/airflow/ingestion
+    - ./spark:/opt/airflow/spark
+    - ./snowflake_load:/opt/airflow/snowflake_load
+    - ./dbt:/opt/airflow/dbt
+    - ./config:/opt/airflow/config
+    - airflow_logs:/opt/airflow/logs
+    # Socket Docker : permet au scheduler de spawn des containers Spark
+    - /var/run/docker.sock:/var/run/docker.sock
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+
+  # ─── Metadata DB ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── MinIO (Data Lake local S3-compatible) ────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console web
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin};
+        mc mb --ignore-existing local/${MINIO_BUCKET:-tmdb-lake};
+        mc anonymous set download local/${MINIO_BUCKET:-tmdb-lake};
+        echo 'Bucket prêt.';
+      "
+
+  # ─── Airflow init ─────────────────────────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin --firstname Admin --lastname User \
+          --role Admin --email admin@example.com --password admin
+    restart: on-failure
+
+  # ─── Airflow Webserver ────────────────────────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      retries: 5
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ─── Airflow Scheduler ────────────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:
+  minio_data:
+  airflow_logs:

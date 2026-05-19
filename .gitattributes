@@ -1,0 +1,18 @@
+# Normalisation cross-platform : LF en interne, conversion native au checkout sur Windows uniquement pour les scripts shell
+* text=auto eol=lf
+
+# Binaires
+*.parquet binary
+*.p8 binary
+*.pem binary
+*.pdf binary
+*.png binary
+*.jpg binary
+
+# Scripts conservés en LF (exécutés dans des containers Linux)
+*.sh text eol=lf
+*.py text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile* text eol=lf

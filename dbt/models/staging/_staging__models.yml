@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: stg_movies
+    description: "Films TMDB typés (1 ligne par movie_id)."
+    columns:
+      - name: movie_id
+        tests: [unique, not_null]
+      - name: popularity_tier
+        tests:
+          - accepted_values:
+              values: ['high', 'medium', 'low']
+      - name: vote_tier
+        tests:
+          - accepted_values:
+              values: ['excellent', 'good', 'average', 'poor']
+
+  - name: stg_genres
+    columns:
+      - name: genre_id
+        tests: [unique, not_null]
+      - name: genre_name
+        tests: [not_null]
+
+  - name: stg_countries
+    columns:
+      - name: country_code
+        tests: [unique, not_null]
+
+  - name: stg_languages
+    columns:
+      - name: language_code
+        tests: [unique, not_null]
+
+  - name: stg_movie_genres
+    description: "Pont N-N film ↔ genre (déduplicaté)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [movie_id, genre_id]
+    columns:
+      - name: movie_id
+        tests: [not_null]
+      - name: genre_id
+        tests: [not_null]

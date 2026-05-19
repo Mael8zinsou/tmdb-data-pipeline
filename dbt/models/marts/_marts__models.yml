@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  # ─── Dimensions ────────────────────────────────────────────────────────────
+  - name: dim_genre
+    description: "Dimension genre."
+    columns:
+      - name: genre_id
+        tests: [unique, not_null]
+      - name: genre_name
+        tests: [not_null]
+
+  - name: dim_country
+    description: "Dimension pays."
+    columns:
+      - name: country_code
+        tests: [unique, not_null]
+
+  - name: dim_language
+    description: "Dimension langue."
+    columns:
+      - name: language_code
+        tests: [unique, not_null]
+
+  - name: dim_date
+    description: "Dimension calendaire (1 ligne par jour entre date_range_start et date_range_end)."
+    columns:
+      - name: date_id
+        tests: [unique, not_null]
+      - name: date_day
+        tests: [unique, not_null]
+      - name: year
+        tests: [not_null]
+
+  # ─── Fait + bridge ─────────────────────────────────────────────────────────
+  - name: fct_movies
+    description: "Table de faits : 1 ligne par film."
+    columns:
+      - name: movie_id
+        tests: [unique, not_null]
+      - name: release_date_id
+        tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_id
+      - name: language_code
+        tests:
+          - relationships:
+              to: ref('dim_language')
+              field: language_code
+      - name: popularity
+        tests: [not_null]
+      - name: vote_average
+        tests: [not_null]
+
+  - name: bridge_movie_genre
+    description: "Pont N-N : 1 ligne par couple (movie_id, genre_id)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [movie_id, genre_id]
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('fct_movies')
+              field: movie_id
+      - name: genre_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_genre')
+              field: genre_id

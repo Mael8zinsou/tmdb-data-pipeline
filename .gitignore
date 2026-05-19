@@ -1,0 +1,67 @@
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+.env
+.env.local
+!.env.example
+config/keys/
+*.p8
+*.pem
+*.key
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# ─── DBT artifacts ────────────────────────────────────────────────────────────
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+
+# ─── Airflow runtime ──────────────────────────────────────────────────────────
+logs/
+airflow/logs/
+airflow.db
+airflow-webserver.pid
+standalone_admin_password.txt
+
+# ─── Données locales (Data Lake / Parquet) ────────────────────────────────────
+data/raw/
+data/staging/
+data/curated/
+*.parquet
+*.snappy.parquet
+
+# ─── Docker volumes persistés (si jamais bind-montés) ─────────────────────────
+volumes/
+minio_data/
+postgres_data/
+
+# ─── IDE / Outils dev locaux ──────────────────────────────────────────────────
+.vscode/
+.idea/
+.claude/settings.local.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Build / cache ────────────────────────────────────────────────────────────
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# ─── Archives / binaires ──────────────────────────────────────────────────────
+*.jar
+*.zip
+*.tar.gz
+
+# ─── Spécifique projet ────────────────────────────────────────────────────────
+# Sujet PDF (référence personnelle, pas pour le repo public)
+Projet final*.pdf

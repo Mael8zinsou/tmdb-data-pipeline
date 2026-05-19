@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: int_movies_with_metrics
+    description: "Films enrichis avec score composite et flag is_recent."
+    columns:
+      - name: movie_id
+        tests: [unique, not_null]
+      - name: composite_score
+        tests: [not_null]

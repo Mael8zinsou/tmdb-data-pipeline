@@ -1,0 +1,37 @@
+name: tmdb_pipeline
+version: 1.0.0
+config-version: 2
+
+profile: tmdb_snowflake
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - target
+  - dbt_packages
+  - logs
+
+models:
+  tmdb_pipeline:
+    # Couche staging : views typées sur RAW
+    staging:
+      +materialized: view
+      +schema: staging
+    # Couche intermediate : views d'enrichissement
+    intermediate:
+      +materialized: view
+      +schema: staging
+    # Couche marts : tables physiques (star schema)
+    marts:
+      +materialized: table
+      +schema: marts
+
+vars:
+  # Plage de dates pour dim_date
+  date_range_start: "1900-01-01"
+  date_range_end:   "2030-12-31"
