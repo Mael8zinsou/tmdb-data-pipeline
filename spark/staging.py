@@ -17,8 +17,8 @@ from datetime import date
 
 from pyspark.sql import DataFrame, functions as F
 from pyspark.sql.types import (
-    StructType, StructField, StringType, IntegerType, LongType,
-    DoubleType, BooleanType, ArrayType, DateType,
+    StructType, StructField, StringType, LongType,
+    DoubleType, BooleanType, ArrayType,
 )
 
 from spark.utils import get_spark, s3a_path

@@ -20,7 +20,6 @@ Tables créées (idempotent CREATE OR REPLACE) :
 """
 
 import os
-import io
 import logging
 import tempfile
 from datetime import date
