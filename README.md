@@ -1,425 +1,262 @@
-# Pipeline TMDB — Data Engineering End-to-End
+# 🎬 TMDB Data Engineering Pipeline
 
 [![CI](https://github.com/Mael8zinsou/tmdb-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Mael8zinsou/tmdb-data-pipeline/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Airflow](https://img.shields.io/badge/airflow-2.9.1-017CEE.svg)
+![Spark](https://img.shields.io/badge/spark-3.5.1-E25A1C.svg)
+![DBT](https://img.shields.io/badge/dbt-1.8.3-FF694B.svg)
+![Snowflake](https://img.shields.io/badge/warehouse-snowflake-29B5E8.svg)
 
-> Projet final M2 Data Engineer · YNOV · Maël Zinsou · Soutenance 19 mai 2026
-
-Pipeline de données distribuée complète : ingestion paginée d'une API publique → Data Lake → traitement distribué → Data Warehouse → modélisation dimensionnelle, orchestrée par Apache Airflow.
-
-**Repo :** https://github.com/Mael8zinsou/tmdb-data-pipeline
+> **Pipeline data engineering distribuée end-to-end** : ingestion API → Data Lake → traitement Spark → Data Warehouse → modélisation dimensionnelle → monitoring temps réel.
+>
+> Projet final M2 Data Engineer · YNOV · Maël Zinsou · 2026
 
 ---
 
-## Architecture
+## ✨ Ce que fait ce projet
+
+Une pipeline complète qui démontre l'ensemble du cycle de vie de la donnée, des outils du marché jusqu'aux bonnes pratiques de production :
+
+| Métrique | Valeur |
+|---|---|
+| **Durée end-to-end** | ~6 minutes (60 films de démo) |
+| **Couches medallion** | RAW → STAGING → CURATED → MARTS |
+| **Modèles DBT** | 12 modèles, 51 tests, **63 / 63 PASS** |
+| **Tasks Airflow** | 8 tasks séquentielles, déclenchables on-demand |
+| **Services Docker** | 7 containers orchestrés (Airflow, Postgres, MinIO, Spark, Prometheus, Grafana, statsd-exporter) |
+| **CI GitHub Actions** | ~1 min (ruff + DAG parse + dbt parse) |
+| **Métriques exposées** | ~80 métriques Airflow temps réel |
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Apache Airflow  (orchestration, 8 tasks)                 │
-└──────────────────────────────────┬──────────────────────────────────────────┘
-                                   │
-         ┌─────────────────────────▼──────────────────────────┐
-         │  1. INGESTION                                       │
-         │     TMDB API (/discover/movie, /genre, /config)     │
-         │     Python · requests · pagination jusqu'à 500p     │
-         │     → Parquet snappy partitionné par ingestion_date  │
-         └─────────────────────────┬──────────────────────────┘
-                                   │ boto3 / S3
-         ┌─────────────────────────▼──────────────────────────┐
-         │  2. DATA LAKE  (MinIO — S3-compatible local)        │
-         │     raw/movies/          raw/genres/                │
-         │     raw/countries/       raw/languages/             │
-         └──────────┬──────────────────────────┬──────────────┘
-                    │ S3A (hadoop-aws 3.3.4)    │
-         ┌──────────▼──────────┐    ┌──────────▼──────────────┐
-         │  3. SPARK STAGING   │    │  4. SPARK CURATED        │
-         │     PySpark 3.5.1   │ →  │     PySpark 3.5.1        │
-         │     typage, dédup,  │    │     jointures, colonnes  │
-         │     nettoyage       │    │     dérivées, pont N-N   │
-         │  (Docker container) │    │  (Docker container)      │
-         └─────────────────────┘    └──────────┬───────────────┘
-                                               │ Parquet (curated/)
-                                    ┌──────────▼───────────────┐
-                                    │  5. SNOWFLAKE  TMDB_DW   │
-                                    │     schéma RAW           │
-                                    │     PUT + COPY INTO      │
-                                    │     auth RSA key-pair    │
-                                    └──────────┬───────────────┘
-                                               │ SQL (Jinja2)
-                                    ┌──────────▼───────────────┐
-                                    │  6. DBT  →  MARTS        │
-                                    │  ┌─ fct_movies      (60) │
-                                    │  ├─ bridge_movie_genre    │
-                                    │  │    (161, pont N-N)     │
-                                    │  ├─ dim_genre        (19) │
-                                    │  ├─ dim_date      (47 k)  │
-                                    │  ├─ dim_country    (251)  │
-                                    │  └─ dim_language   (187)  │
-                                    │  63 / 63 tests PASS      │
-                                    └──────────────────────────┘
+                      ┌─────────────────────────────────────┐
+                      │   Apache Airflow (orchestration)    │
+                      │   DAG 8 tasks, schedule=None        │
+                      └────────────────┬────────────────────┘
+                                       │
+   ┌──────────┐    REST API   ┌────────▼─────────┐    S3A    ┌─────────────────┐
+   │ TMDB API │──────────────►│  MinIO (raw/)    │──────────►│ Spark Staging   │
+   │ /discover│   pagination  │  Parquet snappy  │           │ (Docker, ephem.)│
+   └──────────┘   retry expo. └──────────────────┘           └────────┬────────┘
+                                                                      │
+                                                       ┌──────────────▼──────────────┐
+                                                       │  MinIO (staging/)           │
+                                                       └──────────────┬──────────────┘
+                                                                      │
+                                                       ┌──────────────▼──────────────┐
+                                                       │  Spark Curated (Docker)     │
+                                                       │  jointures + enrichissement │
+                                                       └──────────────┬──────────────┘
+                                                                      │
+                                                       ┌──────────────▼──────────────┐
+                                                       │  MinIO (curated/)           │
+                                                       └──────────────┬──────────────┘
+                                                                      │ PUT + COPY INTO
+                                                                      │ (RSA key auth)
+                                                       ┌──────────────▼──────────────┐
+                                                       │  Snowflake TMDB_DW.RAW      │
+                                                       └──────────────┬──────────────┘
+                                                                      │ DBT
+                                                       ┌──────────────▼──────────────┐
+                                                       │  STAGING (views) + MARTS    │
+                                                       │  star schema + 51 tests     │
+                                                       └─────────────────────────────┘
+
+         ┌─ Monitoring (transverse) ──────────────────────────────────────────┐
+         │   Airflow ─StatsD UDP─► statsd-exporter ─scrape─► Prometheus       │
+         │                                                       ▼            │
+         │                                                    Grafana         │
+         │                              (5 panels auto-provisionnés)          │
+         └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Stack
+> Architecture détaillée + diagramme de flux + modèle de données : [`doc.md`](doc.md).
 
-| Couche | Technologie | Version |
+---
+
+## 🛠️ Stack technologique
+
+| Couche | Techno | Pourquoi ce choix |
 |---|---|---|
-| Ingestion | Python + `requests` (retry exponentiel) | 3.11 |
-| Data Lake | MinIO S3-compatible | latest |
-| Traitement | PySpark (container `apache/spark`) | 3.5.1 |
-| Warehouse | Snowflake (auth RSA key-pair) | trial |
-| Modélisation | DBT Core + dbt-snowflake + dbt_utils | 1.8.3 |
-| Orchestration | Apache Airflow (LocalExecutor) | 2.9.1 |
-| Infra | Docker Compose | v2 |
+| **Ingestion** | Python 3.11 + `requests` | Pagination native TMDB, retry exponentiel `Session+Retry` |
+| **Data Lake** | MinIO (S3-compatible) | Mêmes APIs que S3/GCS prod, gratuit en local |
+| **Traitement** | PySpark 3.5.1 (Docker) | Distribué, scalable, isole les déps Hadoop |
+| **Warehouse** | Snowflake (auth RSA) | Standard industrie, séparation compute/storage |
+| **Modélisation** | DBT Core 1.8.3 + `dbt_utils` | SQL-as-code, lineage explicite, tests automatiques |
+| **Orchestration** | Apache Airflow 2.9.1 | DAG, retry, observabilité native StatsD |
+| **Monitoring** | Prometheus 2.51 + Grafana 10.4 | Standard cloud-native, métriques + dashboards |
+| **Infra** | Docker Compose v2 | 7 services en une commande |
+| **CI** | GitHub Actions | Ruff lint + Airflow DAG parse + dbt parse |
 
 ---
 
-## Prérequis
+## 📊 Modèle de données — Star schema
 
-- **Docker Desktop** ≥ 4.x (avec socket exposé — activé par défaut)
-- **Python** 3.10+ (pour les scripts manuels hors Docker)
-- Compte **Snowflake** (trial gratuit sur snowflake.com)
-- Clé **TMDB API** (gratuite sur themoviedb.org)
-- **OpenSSL** (pour générer la paire RSA Snowflake)
+```
+              fct_movies (60)
+              ┌────┴───────────┬─────────────┐
+              ▼                ▼             ▼
+       dim_date          dim_language   bridge_movie_genre (161)
+       (47 846)            (187)               │
+                                               ▼
+                                          dim_genre (19)
 
----
-
-## Setup
-
-### 1. Cloner / entrer dans le dossier
-
-```bash
-cd "Final pipeline v1"
+       dim_country (251)  [référentiel]
 ```
 
-### 2. Configurer les secrets
+Star schema classique avec un pont N-N (`bridge_movie_genre`) pour la relation films ↔ genres. Modélisé en DBT (`marts/`), matérialisé en tables Snowflake, testé automatiquement.
+
+---
+
+## 📈 Monitoring temps réel
+
+Dashboard Grafana **auto-provisionné** au démarrage de la stack — aucune config manuelle :
+
+| Panel | Métrique sous-jacente |
+|---|---|
+| Scheduler heartbeat (rate/min) | `rate(airflow_scheduler_heartbeat[1m]) * 60` |
+| DAG runs succeeded (24h) | `sum(increase(airflow_dagrun_succeeded_total[24h]))` |
+| DAG runs failed (24h) | `sum(increase(airflow_dagrun_failed_total[24h]))` |
+| Tasks running | `airflow_executor_running_tasks` |
+| Durée par task (p99) | `airflow_task_duration_seconds{dag_id="tmdb_pipeline"}` |
+
+Chaîne : Airflow émet en StatsD (UDP 9125) → `statsd-exporter` traduit en Prometheus → scrape toutes les 15s → Grafana query.
+
+> Accès : http://localhost:3000 (admin / admin) après `docker compose up -d`.
+
+---
+
+## 🎯 Décisions techniques notables
+
+7 décisions qui ont structuré le projet — un résumé honnête des trade-offs :
+
+| Décision | Pourquoi |
+|---|---|
+| **Auth Snowflake par paire RSA** | MFA obligatoire sur trial → password seul incompatible avec l'automation |
+| **Internal stage Snowflake** | MinIO local inaccessible depuis Snowflake Cloud → pas d'external stage possible |
+| **Spark dans Docker** | Spark sous Windows natif KO (`HADOOP_HOME`, `winutils.exe`) → container portable |
+| **Image Airflow custom** | `docker.io` Debian trop ancien (v1.41 < 1.44) → installation de `docker-ce-cli` officiel |
+| **Macro `generate_schema_name` custom** | DBT préfixe par défaut (`<target>_<schema>`) → override pour utiliser `STAGING`/`MARTS` directs |
+| **`dbt_utils.date_spine` pour `dim_date`** | Snowflake `GENERATOR(rowcount =>)` exige un littéral constant |
+| **StatsD intermédiaire** | Airflow émet nativement en StatsD, pas en Prometheus → `statsd-exporter` traduit avec labels |
+
+> 12 décisions détaillées (avec le *pourquoi* approfondi) : [`doc.md`](doc.md#10-approfondissement--décisions-techniques-détaillées).
+
+---
+
+## 🚀 Quick start
+
+### Prérequis
+
+- Docker Desktop ≥ 4.x
+- Compte [Snowflake](https://snowflake.com/start) (trial gratuit)
+- Clé [TMDB API](https://themoviedb.org/settings/api) (gratuite)
+- OpenSSL (pour la paire RSA)
+
+### 3 étapes
 
 ```bash
+# 1. Configuration
 cp .env.example .env
-```
+# Éditer .env : TMDB_API_KEY + SNOWFLAKE_ACCOUNT + SNOWFLAKE_USER + PROJECT_HOST_PATH
 
-Renseigner dans `.env` :
+# 2. Setup Snowflake (création DB + rôle + clé RSA)
+# → Voir key_command.md §3.3 et §3.4
 
-```bash
-TMDB_API_KEY=<votre_clé_tmdb>
-
-# MinIO — laisser les valeurs par défaut pour le local
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=tmdb-lake
-
-# Chemin HOST du projet (Windows : forward slashes obligatoires)
-PROJECT_HOST_PATH=C:/Users/<vous>/chemin/vers/Final pipeline v1
-DOCKER_NETWORK=finalpipelinev1_default
-TMDB_MAX_PAGES=3      # 3 = 60 films (test), monter à 50+ pour un run réel
-
-# Snowflake (voir section suivante)
-SNOWFLAKE_ACCOUNT=<account_locator>
-SNOWFLAKE_USER=<user>
-SNOWFLAKE_PRIVATE_KEY_PATH=config/keys/snowflake_rsa_key.p8
-SNOWFLAKE_DATABASE=TMDB_DW
-SNOWFLAKE_SCHEMA=RAW
-SNOWFLAKE_WAREHOUSE=COMPUTE_WH
-SNOWFLAKE_ROLE=PIPELINE_ROLE
-```
-
-### 3. Configurer Snowflake
-
-#### a. Créer les objets dans Snowsight (rôle ACCOUNTADMIN)
-
-```sql
-CREATE WAREHOUSE IF NOT EXISTS COMPUTE_WH
-  WITH WAREHOUSE_SIZE = 'XSMALL' AUTO_SUSPEND = 60 AUTO_RESUME = TRUE;
-
-CREATE DATABASE IF NOT EXISTS TMDB_DW;
-CREATE SCHEMA IF NOT EXISTS TMDB_DW.RAW;
-CREATE SCHEMA IF NOT EXISTS TMDB_DW.STAGING;
-CREATE SCHEMA IF NOT EXISTS TMDB_DW.MARTS;
-
-CREATE ROLE IF NOT EXISTS PIPELINE_ROLE;
-GRANT ROLE PIPELINE_ROLE TO ROLE SYSADMIN;
-GRANT USAGE, OPERATE ON WAREHOUSE COMPUTE_WH TO ROLE PIPELINE_ROLE;
-GRANT USAGE ON DATABASE TMDB_DW TO ROLE PIPELINE_ROLE;
-GRANT USAGE, CREATE TABLE, CREATE VIEW, CREATE STAGE, CREATE FILE FORMAT
-  ON ALL SCHEMAS IN DATABASE TMDB_DW TO ROLE PIPELINE_ROLE;
-GRANT USAGE, CREATE TABLE, CREATE VIEW, CREATE STAGE, CREATE FILE FORMAT
-  ON FUTURE SCHEMAS IN DATABASE TMDB_DW TO ROLE PIPELINE_ROLE;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE
-  ON ALL TABLES IN DATABASE TMDB_DW TO ROLE PIPELINE_ROLE;
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE
-  ON FUTURE TABLES IN DATABASE TMDB_DW TO ROLE PIPELINE_ROLE;
-
-GRANT ROLE PIPELINE_ROLE TO USER <VOTRE_USER>;
-ALTER USER <VOTRE_USER> SET
-  DEFAULT_ROLE = PIPELINE_ROLE
-  DEFAULT_WAREHOUSE = COMPUTE_WH
-  DEFAULT_NAMESPACE = TMDB_DW.RAW;
-```
-
-#### b. Générer la paire RSA (authentification sans password)
-
-```bash
-mkdir -p config/keys
-
-# Clé privée PKCS8 non chiffrée
-openssl genrsa 2048 \
-  | openssl pkcs8 -topk8 -inform PEM -out config/keys/snowflake_rsa_key.p8 -nocrypt
-
-# Clé publique
-openssl rsa -in config/keys/snowflake_rsa_key.p8 -pubout \
-  -out config/keys/snowflake_rsa_key.pub
-
-# Extraire le contenu sans les lignes BEGIN/END (pour ALTER USER)
-grep -v "PUBLIC KEY" config/keys/snowflake_rsa_key.pub | tr -d '\n'
-```
-
-```sql
--- Dans Snowsight
-ALTER USER <VOTRE_USER> SET RSA_PUBLIC_KEY='<contenu_clé_pub_sans_BEGIN_END>';
-DESC USER <VOTRE_USER>;   -- vérifier RSA_PUBLIC_KEY_FP
-```
-
-### 4. Lancer l'infrastructure
-
-```bash
+# 3. Démarrage de la stack
 docker compose up -d
 ```
 
-Services exposés :
+Services exposés une fois la stack démarrée :
 
-| Service | URL | Credentials |
+| Service | URL | Login |
 |---|---|---|
 | Airflow UI | http://localhost:8080 | admin / admin |
 | MinIO console | http://localhost:9001 | minioadmin / minioadmin |
 | Grafana | http://localhost:3000 | admin / admin |
 | Prometheus | http://localhost:9090 | — |
 
-Attendre ~30 secondes que l'init Airflow termine (vérifier avec `docker compose logs airflow-init`).
+**Déclencher la pipeline** : http://localhost:8080 → `tmdb_pipeline` → toggle ON → ▶ Trigger.
+
+> Setup détaillé pas-à-pas : [`key_command.md`](key_command.md#3-setup-initial-one-time).
 
 ---
 
-## Exécuter le pipeline
-
-Depuis l'**Airflow UI** (http://localhost:8080) :
-
-1. Activer le DAG `tmdb_pipeline` (toggle ON)
-2. Cliquer **Trigger DAG ▶**
-3. Suivre l'avancement dans la vue Graph
-
-Durée typique (3 pages / 60 films) : **~5–8 minutes** (dont ~4 min de téléchargement des packages Spark au premier run).
-
-### Séquence des tâches
-
-```
-extract_tmdb → spark_staging → spark_curated → snowflake_load
-    → dbt_deps → dbt_run → dbt_test → notify_success
-```
-
-### Résultats attendus
-
-| Couche | Contenu |
-|---|---|
-| MinIO `raw/` | 4 datasets Parquet (movies, genres, countries, languages) |
-| MinIO `staging/` | Films nettoyés + lookups dédupliqués |
-| MinIO `curated/` | 5 datasets enrichis (movies_enriched, movie_genres, dim_*) |
-| Snowflake `RAW.*` | 5 tables chargées via COPY INTO |
-| Snowflake `MARTS.*` | 6 modèles DBT matérialisés, 63/63 tests PASS |
-
----
-
-## Modèle de données (Star Schema)
-
-```
-                  bridge_movie_genre (161)
-                  ┌──────────────────────┐
-                  │ movie_id  genre_id   │──► dim_genre (19)
-                  └──────┬───────────────┘     genre_id · genre_name
-                         │
-fct_movies (60) ─────────┤
-  movie_id (PK)          │
-  date_id ──────────────────────────────────► dim_date (47 846)
-  language_id ─────────────────────────────► dim_language (187)
-  title                                        language_id · name · iso
-  original_language
-  popularity / vote_average / vote_count
-  popularity_tier / vote_tier
-  has_release_date / release_decade
-  is_recent
-
-dim_country (251)   [référentiel — non liée à fct dans v1]
-  country_id · iso_3166_1 · country_name
-```
-
----
-
-## Structure du projet
+## 📂 Structure du projet (vue haute)
 
 ```
 Final pipeline v1/
-│
-├── ingestion/                  Phase 1 — Extraction TMDB
-│   ├── extract_tmdb.py         Pagination + upload Parquet → MinIO
-│   └── __init__.py
-│
-├── spark/                      Phases 2-3 — Traitement distribué
-│   ├── utils.py                SparkSession configurée pour S3A / MinIO
-│   ├── staging.py              Nettoyage, typage, dédup
-│   └── curated.py              Jointures, enrichissement, pont N-N
-│
-├── snowflake_load/             Phase 4 — Chargement Warehouse
-│   └── load.py                 RSA auth · internal stage · PUT + COPY INTO
-│
-├── dbt/                        Phase 5 — Modélisation dimensionnelle
-│   ├── dbt_project.yml
-│   ├── profiles.yml            Auth Snowflake (RSA, via env vars)
-│   ├── packages.yml            dbt_utils 1.1.1
-│   ├── macros/
-│   │   └── generate_schema_name.sql  Override → STAGING/MARTS directs
-│   └── models/
-│       ├── staging/            stg_movies · stg_genres · stg_countries · stg_languages
-│       ├── intermediate/       int_movies_with_metrics
-│       └── marts/              fct_movies · dim_* · bridge_movie_genre
-│
-├── dags/                       Phase 6 — Orchestration Airflow
-│   └── tmdb_pipeline.py        DAG 8 tâches, schedule=None (manuel)
-│
-├── .github/workflows/
-│   └── ci.yml                  GitHub Actions : ruff + DAG parse + dbt parse
-│
-├── monitoring/                 Phase 8 — Observabilité
-│   ├── prometheus.yml          Config scrape Prometheus
-│   ├── statsd_mapping.yml      Translation StatsD → Prometheus (labels)
-│   └── grafana/
-│       ├── provisioning/       Datasource + provider dashboard (yaml)
-│       └── dashboards/         tmdb-pipeline.json (5 panels)
-│
-├── config/
-│   └── keys/                   Clés RSA Snowflake (non committées)
-│
-├── Dockerfile.airflow          Image custom Airflow + docker-ce-cli
-├── docker-compose.yml          Stack locale complète
-├── requirements-airflow.txt    Dépendances Python embarquées dans l'image
-├── .env.example                Template secrets (committer ✅)
-├── .env                        Secrets réels (ne jamais committer ❌)
-├── .gitignore                  Exclusions (.env, keys, target/, parquet…)
-├── .gitattributes              Normalisation LF cross-platform
-├── doc.md                      Documentation technique complète
-└── key_command.md              Runbook commandes + erreurs + fixes
+├── ingestion/         Phase 1  — Extraction TMDB → Parquet
+├── spark/             Phases 2-3 — Staging + Curated (PySpark)
+├── snowflake_load/    Phase 4  — COPY INTO Snowflake
+├── dbt/               Phase 5  — Star schema + 51 tests
+├── dags/              Phase 6  — DAG Airflow (8 tasks)
+├── monitoring/        Phase 8  — Prometheus + Grafana provisioning
+├── .github/workflows/ CI       — ruff + DAG parse + dbt parse
+├── doc.md             Documentation technique exhaustive
+├── key_command.md     Runbook opérationnel (commandes, debug, reset)
+└── notice_démo.md     Script de la démo soutenance
 ```
+
+> Arborescence complète détaillée : [`doc.md`](doc.md#3-structure-du-projet).
 
 ---
 
-## Monitoring (Prometheus + Grafana)
+## Tests & qualité
 
-Stack d'observabilité automatique des métriques Airflow :
-
-```
-Airflow ─StatsD UDP─► statsd-exporter ─scrape─► Prometheus ─query─► Grafana
-       (port 9125)                   (port 9102)            (port 9090)
-```
-
-**Activation** : automatique au `docker compose up` — pas de config manuelle.
-
-**Dashboard** "TMDB Pipeline — Monitoring" auto-provisionné dans Grafana (5 panels) :
-1. Scheduler heartbeat (rate/min, vert = sain)
-2. DAG runs réussis (24h)
-3. DAG runs en échec (24h)
-4. Tasks en cours d'exécution
-5. Durée par task du `tmdb_pipeline` (timeseries, p99)
-
-**Stockage** : Prometheus retient 7 jours (`--storage.tsdb.retention.time=7d`), Grafana dashboards persistants dans le volume `grafana_data`.
-
-**Métriques disponibles** (~80 métriques émises par Airflow 2.9) :
-- `airflow_scheduler_*` (heartbeat, loop duration, tasks executable/running/starving)
-- `airflow_executor_*` (open slots, running, queued)
-- `airflow_dagrun_duration_success_seconds{dag_id="..."}`
-- `airflow_task_duration_seconds{dag_id="...", task_id="..."}`
-- `airflow_dag_processing_*` (import errors, file path queue, last duration)
-
-Le mapping StatsD → Prometheus (avec labellisation `dag_id`/`task_id`) est dans [monitoring/statsd_mapping.yml](monitoring/statsd_mapping.yml).
+- **CI GitHub Actions** ([badge ci-dessus](https://github.com/Mael8zinsou/tmdb-data-pipeline/actions)) : ruff lint + Airflow DAG parse + dbt parse, ~1 min, vert sur `main`.
+- **51 tests DBT** automatiques : unicité PK, not_null, accepted_values, relationships (FK), `dbt_utils.unique_combination_of_columns`.
+- **Pipeline idempotente** : ré-exécutable sur la même date sans duplication (partitions MinIO par `ingestion_date`, `TRUNCATE` Snowflake, `CREATE OR REPLACE` DBT).
+- **Secrets jamais committés** : `.env`, clés RSA, `target/`, `dbt_packages/` tous gitignored.
 
 ---
 
-## Intégration continue (GitHub Actions)
+## Roadmap — Améliorations possibles
 
-Workflow `.github/workflows/ci.yml` — déclenché à chaque push sur `main` ou pull request :
-
-| Étape | Outil | Vérifie |
-|---|---|---|
-| **Lint** | ruff (rules E, F) | Pas d'imports inutilisés, pas d'erreurs syntaxe |
-| **DAG parse** | `DagBag` | DAG Airflow importable, sans erreurs de parsing |
-| **DBT parse** | `dbt parse` | Modèles DBT syntaxiquement valides, refs cohérentes |
-
-Pas de tests d'intégration en CI (nécessiterait des secrets Snowflake/TMDB). Le DAG et DBT sont parsés avec des env vars dummy — aucune exécution réelle.
-
-Durée typique : **~1 minute**.
-
----
-
-## Décisions techniques clés
-
-| Problème | Solution retenue |
+| Court terme | Impact |
 |---|---|
-| MFA obligatoire sur Snowflake trial | Authentification par paire de clés RSA (PKCS8 non chiffré) |
-| Spark impossible sous Windows natif | Spark dans container Docker `apache/spark:3.5.1-python3` |
-| MinIO inaccessible depuis Snowflake Cloud | Internal stage Snowflake (PUT local → COPY INTO) |
-| `snowflake/` shadow le package PyPI | Dossier renommé `snowflake_load/` |
-| `GENERATOR(rowcount =>)` Snowflake exige constante | `dbt_utils.date_spine` pour `dim_date` |
-| DBT crée `PUBLIC_staging` au lieu de `STAGING` | Macro `generate_schema_name` overridée |
-| Path Windows `/c/Users/...` rejeté par Docker daemon | `PROJECT_HOST_PATH=C:/Users/...` (forward slashes) dans `.env` |
+| Ajout de `enrich_movie_details` task → endpoint `/movie/{id}` | Récupérer `budget` / `revenue` → KPIs ROI dans MARTS |
+| Tests pytest sur `extract_tmdb.py` et `spark/staging.py` | Couverture des transformations Python |
+| Bump des actions GitHub vers Node.js 24 | Anti-deprecation (Node 20 EOL juin 2026) |
+
+| Moyen terme | Impact |
+|---|---|
+| **Alertmanager** (Prometheus) avec route Slack/Email | Notif automatique sur DAG failed / scheduler down |
+| **Dashboard analytique** (Metabase / Superset / Power BI) sur MARTS | Visualisation des KPIs (top genres, distribution notes, etc.) |
+| **Schedule automatique** (`@daily`) au lieu de `schedule=None` | Pipeline en mode "production" |
+
+| Long terme | Impact |
+|---|---|
+| Migration cloud (S3 + EKS/Cloud Composer + Snowflake conservé) | Production-grade scalable |
+| Cluster Spark managé (Databricks / Dataproc / EMR) | Volumes > 100k films |
+| Secrets manager (Vault / AWS Secrets Manager) | Sécurité production |
+| CDC / streaming (Kafka + Debezium) pour ingestion incrémentale | Vraie pipeline temps réel |
 
 ---
 
-## Troubleshooting
+## 📚 Documentation
 
-**`docker compose up` — airflow-init ne se termine pas**
-```bash
-docker compose logs airflow-init
-# Si "waiting for postgres" : attendre 30s, postgres démarre parfois lentement
-```
+Trois documents complémentaires selon l'usage :
 
-**spark_staging échoue — exit 125**
-```bash
-# Vérifier que le socket Docker est accessible depuis le scheduler
-docker exec airflow-scheduler docker ps
-# Vérifier le nom du réseau
-docker network ls | grep pipeline
-```
-
-**Snowflake — `JWT token is invalid`**
-```bash
-# Vérifier le fingerprint local vs Snowsight
-openssl rsa -in config/keys/snowflake_rsa_key.p8 -pubout -outform DER 2>/dev/null \
-  | openssl dgst -sha256 -binary | openssl enc -base64
-# Dans Snowsight : DESC USER <USER>; → RSA_PUBLIC_KEY_FP doit matcher
-```
-
-**DBT — `Insufficient privileges`**
-```sql
--- S'assurer que PIPELINE_ROLE a CREATE sur les schémas futurs
-GRANT USAGE, CREATE TABLE, CREATE VIEW, CREATE STAGE, CREATE FILE FORMAT
-  ON FUTURE SCHEMAS IN DATABASE TMDB_DW TO ROLE PIPELINE_ROLE;
-```
-
-**Reset complet (repartir de zéro)**
-```bash
-# Vider MinIO
-docker run --rm --network finalpipelinev1_default --entrypoint sh minio/mc:latest \
-  -c "mc alias set l http://minio:9000 minioadmin minioadmin && mc rm --recursive --force l/tmdb-lake/"
-
-# Truncate Snowflake RAW (dans Snowsight)
-# TRUNCATE TABLE RAW.MOVIES_ENRICHED; -- etc.
-```
-
----
-
-## État du projet
-
-| Phase | Description | Statut |
+| Document | Pour quoi | Quand le consulter |
 |---|---|---|
-| 1 | Infrastructure & Ingestion TMDB | ✅ |
-| 2 | Spark Staging (nettoyage) | ✅ |
-| 3 | Spark Curated (enrichissement) | ✅ |
-| 4 | Snowflake — COPY INTO | ✅ |
-| 5 | DBT — Star Schema (63/63 tests) | ✅ |
-| 6 | DAG Airflow — orchestration E2E | ✅ |
-| 7 | Documentation finale + repo public GitHub + CI | ✅ |
-| 8 | Monitoring Prometheus + Grafana (dashboard auto-provisionné) | ✅ |
+| [`doc.md`](doc.md) | Documentation technique exhaustive | Comprendre les décisions, l'archi, les phases |
+| [`key_command.md`](key_command.md) | Runbook opérationnel | Reproduire, exploiter, debugger |
+| [`notice_démo.md`](notice_démo.md) | Script démo soutenance | Préparation et déroulé de la présentation |
+
+---
+
+## 🎓 Contexte académique
+
+Projet final du Master 2 Data Engineer, **YNOV**, dans le cadre du module *Stockage et Traitement des Données Distribuées*. L'objectif pédagogique : concevoir une pipeline data réaliste mobilisant l'ensemble du stack moderne (orchestration, data lake, distributed processing, warehouse, transformations SQL versionnées, observabilité).
+
+**Auteur :** Maël Zinsou
+**Date de soutenance :** 2026-05-19
+**Repo :** https://github.com/Mael8zinsou/tmdb-data-pipeline
+
+---
+
+> 💡 *Ce projet est conçu comme un *showcase* end-to-end, pas un produit fini. Il met l'accent sur la qualité du code, la documentation, et la cohérence d'ensemble — plutôt que sur l'exhaustivité du périmètre fonctionnel.*
