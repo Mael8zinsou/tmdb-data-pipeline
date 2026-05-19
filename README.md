@@ -1,8 +1,12 @@
 # Pipeline TMDB — Data Engineering End-to-End
 
+[![CI](https://github.com/Mael8zinsou/tmdb-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Mael8zinsou/tmdb-data-pipeline/actions/workflows/ci.yml)
+
 > Projet final M2 Data Engineer · YNOV · Maël Zinsou · Soutenance 19 mai 2026
 
 Pipeline de données distribuée complète : ingestion paginée d'une API publique → Data Lake → traitement distribué → Data Warehouse → modélisation dimensionnelle, orchestrée par Apache Airflow.
+
+**Repo :** https://github.com/Mael8zinsou/tmdb-data-pipeline
 
 ---
 
@@ -275,6 +279,9 @@ Final pipeline v1/
 ├── dags/                       Phase 6 — Orchestration Airflow
 │   └── tmdb_pipeline.py        DAG 8 tâches, schedule=None (manuel)
 │
+├── .github/workflows/
+│   └── ci.yml                  GitHub Actions : ruff + DAG parse + dbt parse
+│
 ├── config/
 │   └── keys/                   Clés RSA Snowflake (non committées)
 │
@@ -283,9 +290,27 @@ Final pipeline v1/
 ├── requirements-airflow.txt    Dépendances Python embarquées dans l'image
 ├── .env.example                Template secrets (committer ✅)
 ├── .env                        Secrets réels (ne jamais committer ❌)
+├── .gitignore                  Exclusions (.env, keys, target/, parquet…)
+├── .gitattributes              Normalisation LF cross-platform
 ├── doc.md                      Documentation technique complète
 └── key_command.md              Runbook commandes + erreurs + fixes
 ```
+
+---
+
+## Intégration continue (GitHub Actions)
+
+Workflow `.github/workflows/ci.yml` — déclenché à chaque push sur `main` ou pull request :
+
+| Étape | Outil | Vérifie |
+|---|---|---|
+| **Lint** | ruff (rules E, F) | Pas d'imports inutilisés, pas d'erreurs syntaxe |
+| **DAG parse** | `DagBag` | DAG Airflow importable, sans erreurs de parsing |
+| **DBT parse** | `dbt parse` | Modèles DBT syntaxiquement valides, refs cohérentes |
+
+Pas de tests d'intégration en CI (nécessiterait des secrets Snowflake/TMDB). Le DAG et DBT sont parsés avec des env vars dummy — aucune exécution réelle.
+
+Durée typique : **~1 minute**.
 
 ---
 
@@ -356,5 +381,5 @@ docker run --rm --network finalpipelinev1_default --entrypoint sh minio/mc:lates
 | 4 | Snowflake — COPY INTO | ✅ |
 | 5 | DBT — Star Schema (63/63 tests) | ✅ |
 | 6 | DAG Airflow — orchestration E2E | ✅ |
-| 7 | Documentation finale | ✅ |
+| 7 | Documentation finale + repo public GitHub + CI | ✅ |
 | 8 | Bonus — Monitoring / Dashboard | ⏳ |

@@ -353,6 +353,64 @@ extract_tmdb ✅ → spark_staging ✅ → spark_curated ✅ → snowflake_load 
 
 ---
 
+## 🐙 Phase 7 — Publication GitHub + CI
+
+### Lignes directrices
+- **Repo public** : https://github.com/Mael8zinsou/tmdb-data-pipeline
+- **`.gitignore` strict** : `.env`, `config/keys/`, `*.p8`, `dbt/target/`, `dbt/dbt_packages/`, `dbt/logs/`, `dbt/.user.yml`, `__pycache__/`, parquets, PDF du sujet
+- **`.gitattributes`** : LF forcé sur fichiers texte (cohérence Windows ↔ Linux containers)
+- **CI minimaliste** (`.github/workflows/ci.yml`) : ruff + Airflow DAG parse + dbt parse, ~1 min
+- **Pas de tests d'intégration** : pas de secrets exposés en CI, dummy env vars suffisent pour les parse steps
+
+### Commandes clés (setup initial)
+```bash
+# 1. Init repo local + premier add
+git init -b main
+git add .
+git status --short                            # vérifier ce qui est stagé
+git status --ignored --short | grep -E "\.env|/keys/"   # sanity check secrets
+
+# 2. Premier commit
+git commit -m "Initial commit: TMDB data engineering pipeline"
+
+# 3. Création repo distant + push (via gh CLI)
+gh auth status                                # vérifier authentification
+gh repo create tmdb-data-pipeline --public \
+  --source=. --remote=origin \
+  --description "..." --push
+
+# 4. Surveiller la CI
+gh run list --limit 3
+gh run watch <RUN_ID> --exit-status
+gh run view <RUN_ID> --log-failed             # si échec
+```
+
+### Erreurs & ajustements CI
+| Erreur | Cause | Fix |
+|---|---|---|
+| `ruff F401: 'io' imported but unused` (load.py) | Import laissé après refactor | Suppression manuelle |
+| `ruff F401: IntegerType, DateType imported but unused` (staging.py) | Imports prévus puis non utilisés | Suppression manuelle |
+| `KeyError: 'TMDB_API_KEY'` au DAG parse | `extract_tmdb.py` lit la clé au module-level → exception à l'import dans CI | Injection de dummy env vars dans l'étape `Parse Airflow DAG` |
+| `.claude/settings.local.json` initialement stagé | Config user-local Claude Code | Ajouté à `.gitignore` + `git rm --cached` |
+
+### Structure de la CI
+```yaml
+# .github/workflows/ci.yml (3 étapes)
+1. Lint (ruff)        → ruff check --select E,F --ignore E501 sur src/
+2. Parse Airflow DAG  → DagBag().import_errors == {} (avec env vars dummy)
+3. Parse DBT          → dbt deps && dbt parse (avec env vars dummy)
+```
+
+### Validation finale
+3 commits initiaux poussés, CI verte en 1m01s :
+```
+aaeb583 Initial commit: TMDB data engineering pipeline       ❌ ruff
+100914c fix(lint): remove unused imports flagged by ruff     ❌ DAG parse
+82e1421 ci: provide dummy env vars for DAG parse step        ✅ ALL PASS
+```
+
+---
+
 ## 🔧 Commandes de debug récurrentes
 
 ### Re-générer la paire RSA Snowflake

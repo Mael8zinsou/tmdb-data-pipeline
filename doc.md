@@ -228,14 +228,27 @@ notify_success (BashOperator)
 
 ---
 
-### Phase 7️⃣ : Documentation & README ✅ COMPLÈTE
+### Phase 7️⃣ : Documentation & Publication GitHub ✅ COMPLÈTE
 **Deadline :** 2026-05-15
 
-- README reécrit complet : setup step-by-step, schéma architecture ASCII, star schema, structure projet, troubleshooting
-- Schéma architecture ASCII art intégré au README
+**Documentation :**
+- README réécrit complet : setup step-by-step, schéma architecture ASCII, star schema, structure projet, troubleshooting
 - Data dictionary implicite (noms de colonnes dans le schéma)
 - Exemples d'exécution (commandes complètes)
 - Troubleshooting (5 cas couverts)
+
+**Publication GitHub :**
+- Repo public : **https://github.com/Mael8zinsou/tmdb-data-pipeline**
+- `.gitignore` couvrant secrets (.env, config/keys/, *.p8), artefacts DBT (target/, dbt_packages/, logs/), caches Python, IDE
+- `.gitattributes` pour normalisation LF cross-platform
+- 3 commits initiaux : pipeline complète + fix lint + ajustement CI env vars
+
+**CI (GitHub Actions, `.github/workflows/ci.yml`) :**
+- 3 étapes : ruff (lint) → DAG parse (DagBag) → dbt parse
+- Pas de tests d'intégration (pas de secrets en CI)
+- Env vars dummy injectées pour les `os.environ[...]` lus au module-level
+- Durée typique : ~1 minute
+- Badge CI affiché dans README
 
 ---
 
@@ -402,7 +415,7 @@ airflow dags test tmdb_pipeline 2026-04-27
 - [x] Star schema DBT prêt (fact + dimensions)
 - [x] Tests DBT (63/63 PASS)
 - [ ] Démonstration préparée (run complet + résultats Snowflake + DBT)
-- [ ] GitHub privé avec code complet (sans .env ni config/keys/)
+- [x] GitHub public avec code complet + CI verte (sans .env ni config/keys/)
 - [ ] Bonus (monitoring/dashboard) si possible
 
 ---
