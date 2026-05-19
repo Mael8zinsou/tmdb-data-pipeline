@@ -189,6 +189,8 @@ Services exposés :
 |---|---|---|
 | Airflow UI | http://localhost:8080 | admin / admin |
 | MinIO console | http://localhost:9001 | minioadmin / minioadmin |
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9090 | — |
 
 Attendre ~30 secondes que l'init Airflow termine (vérifier avec `docker compose logs airflow-init`).
 
@@ -282,6 +284,13 @@ Final pipeline v1/
 ├── .github/workflows/
 │   └── ci.yml                  GitHub Actions : ruff + DAG parse + dbt parse
 │
+├── monitoring/                 Phase 8 — Observabilité
+│   ├── prometheus.yml          Config scrape Prometheus
+│   ├── statsd_mapping.yml      Translation StatsD → Prometheus (labels)
+│   └── grafana/
+│       ├── provisioning/       Datasource + provider dashboard (yaml)
+│       └── dashboards/         tmdb-pipeline.json (5 panels)
+│
 ├── config/
 │   └── keys/                   Clés RSA Snowflake (non committées)
 │
@@ -295,6 +304,37 @@ Final pipeline v1/
 ├── doc.md                      Documentation technique complète
 └── key_command.md              Runbook commandes + erreurs + fixes
 ```
+
+---
+
+## Monitoring (Prometheus + Grafana)
+
+Stack d'observabilité automatique des métriques Airflow :
+
+```
+Airflow ─StatsD UDP─► statsd-exporter ─scrape─► Prometheus ─query─► Grafana
+       (port 9125)                   (port 9102)            (port 9090)
+```
+
+**Activation** : automatique au `docker compose up` — pas de config manuelle.
+
+**Dashboard** "TMDB Pipeline — Monitoring" auto-provisionné dans Grafana (5 panels) :
+1. Scheduler heartbeat (rate/min, vert = sain)
+2. DAG runs réussis (24h)
+3. DAG runs en échec (24h)
+4. Tasks en cours d'exécution
+5. Durée par task du `tmdb_pipeline` (timeseries, p99)
+
+**Stockage** : Prometheus retient 7 jours (`--storage.tsdb.retention.time=7d`), Grafana dashboards persistants dans le volume `grafana_data`.
+
+**Métriques disponibles** (~80 métriques émises par Airflow 2.9) :
+- `airflow_scheduler_*` (heartbeat, loop duration, tasks executable/running/starving)
+- `airflow_executor_*` (open slots, running, queued)
+- `airflow_dagrun_duration_success_seconds{dag_id="..."}`
+- `airflow_task_duration_seconds{dag_id="...", task_id="..."}`
+- `airflow_dag_processing_*` (import errors, file path queue, last duration)
+
+Le mapping StatsD → Prometheus (avec labellisation `dag_id`/`task_id`) est dans [monitoring/statsd_mapping.yml](monitoring/statsd_mapping.yml).
 
 ---
 
@@ -382,4 +422,4 @@ docker run --rm --network finalpipelinev1_default --entrypoint sh minio/mc:lates
 | 5 | DBT — Star Schema (63/63 tests) | ✅ |
 | 6 | DAG Airflow — orchestration E2E | ✅ |
 | 7 | Documentation finale + repo public GitHub + CI | ✅ |
-| 8 | Bonus — Monitoring / Dashboard | ⏳ |
+| 8 | Monitoring Prometheus + Grafana (dashboard auto-provisionné) | ✅ |

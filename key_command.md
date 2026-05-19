@@ -411,6 +411,66 @@ aaeb583 Initial commit: TMDB data engineering pipeline       ❌ ruff
 
 ---
 
+## 📊 Phase 8 — Monitoring Prometheus + Grafana
+
+### Lignes directrices
+- **Chaîne** : Airflow (StatsD natif) → statsd-exporter (UDP 9125 → HTTP 9102) → Prometheus → Grafana
+- **3 services** ajoutés au `docker-compose.yml` (statsd-exporter, prometheus, grafana)
+- **Auto-provisionnement Grafana** : datasource Prometheus + dashboard 5 panels, zéro clic au démarrage
+- **Stockage** : 2 volumes Docker (`prometheus_data`, `grafana_data`), retention Prometheus = 7 jours
+
+### Commandes clés
+```bash
+# Démarrage complet (incluant monitoring)
+docker compose up -d
+
+# Vérifier que les 7 containers sont up
+docker compose ps
+
+# Sanity check : métriques Airflow visibles dans statsd-exporter
+curl -s http://localhost:9102/metrics | grep "^airflow_" | head -20
+
+# Vérifier les targets scrapés par Prometheus
+curl -s http://localhost:9090/api/v1/query?query=up | python -m json.tool
+
+# Tester une query Grafana en CLI
+curl -sG http://localhost:9090/api/v1/query \
+  --data-urlencode 'query=rate(airflow_scheduler_heartbeat[1m]) * 60'
+
+# Datasources Grafana provisionnés
+curl -s -u admin:admin http://localhost:3000/api/datasources | python -m json.tool
+
+# Dashboards Grafana provisionnés
+curl -s -u admin:admin http://localhost:3000/api/search?type=dash-db | python -m json.tool
+```
+
+### Erreurs & ajustements
+| Erreur | Cause | Fix |
+|---|---|---|
+| Query `rate(airflow_scheduler_heartbeat[1m])` retourne `[]` | La métrique réelle Airflow 2.9 est `airflow.scheduler_heartbeat` (underscore), pas `scheduler.heartbeat` (dot) | Mapping ajusté dans `statsd_mapping.yml` |
+| Grafana ne charge pas le dashboard JSON | Le YAML du provider provisioning était dans le même dossier que le JSON → Grafana le scannait comme dashboard | Séparation `provisioning/dashboards/` (YAML provider) ↔ `dashboards/` (JSON dashboards) |
+| Prometheus rate vide après restart de statsd-exporter | Besoin de ≥ 2 samples scrapés (>15s) pour calculer un rate | Attendre 30s après restart |
+
+### Architecture du dashboard "TMDB Pipeline — Monitoring"
+```
+Row 1 (top, h=5)
+  ┌──────────────┬──────────────┬──────────────┬──────────────┐
+  │ Heartbeat    │ DAG succ 24h │ DAG fail 24h │ Tasks running│
+  │ (rate/min)   │ (counter)    │ (counter)    │ (gauge)      │
+  └──────────────┴──────────────┴──────────────┴──────────────┘
+Row 2 (bottom, h=12)
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Durée par task du tmdb_pipeline (timeseries, p99, en sec)  │
+  └─────────────────────────────────────────────────────────────┘
+```
+
+### Validation
+- `rate(airflow_scheduler_heartbeat[1m]) * 60` ≈ 12/min (heartbeat toutes les 5s) ✅
+- Datasource Prometheus listée par l'API Grafana ✅
+- Dashboard "TMDB Pipeline — Monitoring" listé par l'API Grafana ✅
+
+---
+
 ## 🔧 Commandes de debug récurrentes
 
 ### Re-générer la paire RSA Snowflake

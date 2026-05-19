@@ -38,6 +38,12 @@ x-airflow-common: &airflow-common
 
     # DBT
     DBT_PROFILES_DIR: /opt/airflow/dbt
+
+    # Monitoring (StatsD → statsd-exporter → Prometheus → Grafana)
+    AIRFLOW__METRICS__STATSD_ON: "True"
+    AIRFLOW__METRICS__STATSD_HOST: statsd-exporter
+    AIRFLOW__METRICS__STATSD_PORT: "9125"
+    AIRFLOW__METRICS__STATSD_PREFIX: airflow
   volumes:
     - ./dags:/opt/airflow/dags
     - ./ingestion:/opt/airflow/ingestion
@@ -137,7 +143,58 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  # ─── Monitoring : StatsD exporter ─────────────────────────────────────────────
+  statsd-exporter:
+    image: prom/statsd-exporter:v0.26.1
+    command:
+      - "--statsd.mapping-config=/etc/statsd/statsd_mapping.yml"
+      - "--statsd.listen-udp=:9125"
+      - "--web.listen-address=:9102"
+    ports:
+      - "9102:9102"   # Endpoint Prometheus (scraping)
+    volumes:
+      - ./monitoring/statsd_mapping.yml:/etc/statsd/statsd_mapping.yml:ro
+    restart: unless-stopped
+
+  # ─── Monitoring : Prometheus ──────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - statsd-exporter
+    restart: unless-stopped
+
+  # ─── Monitoring : Grafana ─────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:
   airflow_logs:
+  prometheus_data:
+  grafana_data:

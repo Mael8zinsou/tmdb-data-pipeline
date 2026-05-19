@@ -252,17 +252,49 @@ notify_success (BashOperator)
 
 ---
 
-### Phase 8️⃣ : Bonus (si temps)
+### Phase 8️⃣ : Monitoring Prometheus + Grafana ✅ COMPLÈTE
 **Deadline :** 2026-05-18
 
-**Monitoring :**
-- Logs structurés (JSON) → MinIO/logs/
-- Métriques Airflow (duration, success rate)
-- Dashboard Grafana (optionnel)
+**Architecture du monitoring :**
+```
+Airflow (StatsD client natif) → statsd-exporter → Prometheus → Grafana
+                              (UDP 9125)        (scrape 15s)
+```
 
-**Data Visualization :**
-- Power BI / Tableau / Metabase sur marts
-- KPIs : top genres, box office trends, ROI distribution
+**3 services ajoutés à `docker-compose.yml` :**
+- `statsd-exporter` (prom/statsd-exporter:v0.26.1) — UDP 9125 entrée, HTTP 9102 sortie
+- `prometheus` (prom/prometheus:v2.51.2) — scrape, retention 7 jours
+- `grafana` (grafana/grafana:10.4.2) — auto-provisionné (datasource + dashboard)
+
+**Config Airflow** (env vars dans `x-airflow-common`) :
+- `AIRFLOW__METRICS__STATSD_ON=True`
+- `AIRFLOW__METRICS__STATSD_HOST=statsd-exporter`
+- `AIRFLOW__METRICS__STATSD_PORT=9125`
+- `AIRFLOW__METRICS__STATSD_PREFIX=airflow`
+
+**Dashboard "TMDB Pipeline — Monitoring"** (5 panels) :
+1. Scheduler heartbeat (rate/min, seuils vert ≥5, jaune ≥1, rouge =0)
+2. DAG runs succeeded (24h)
+3. DAG runs failed (24h)
+4. Tasks running actuellement
+5. Durée par task du `tmdb_pipeline` (timeseries, p99)
+
+**Mapping StatsD → Prometheus** (`monitoring/statsd_mapping.yml`) :
+- Conversion des métriques pointées (`airflow.dagrun.duration.success.<dag_id>`) en métriques Prometheus avec labels (`dag_id`, `task_id`)
+- ~10 règles + fallback `airflow_unmapped{raw_metric="..."}` pour les exceptions
+
+**Validation runtime :**
+- `airflow_scheduler_heartbeat` rate ≈ 12/min ✅
+- `airflow_executor_open_slots`, `airflow_executor_running_tasks` exposés ✅
+- Datasource Prometheus + dashboard auto-provisionnés au démarrage ✅
+
+**Décision technique :**
+- Métrique réelle Airflow 2.9 = `airflow.scheduler_heartbeat` (underscore), pas `scheduler.heartbeat` → mapping ajusté
+- Métriques Spark hors scope (containers éphémères) — démontrable en soutenance
+- Pas d'alerting (Alertmanager) : démonstrable visuellement via le dashboard
+
+**Data Visualization (hors scope, post-soutenance possible) :**
+- Metabase / Superset connecté à `TMDB_DW.MARTS` pour KPIs analytiques
 
 ---
 
@@ -416,12 +448,12 @@ airflow dags test tmdb_pipeline 2026-04-27
 - [x] Tests DBT (63/63 PASS)
 - [ ] Démonstration préparée (run complet + résultats Snowflake + DBT)
 - [x] GitHub public avec code complet + CI verte (sans .env ni config/keys/)
-- [ ] Bonus (monitoring/dashboard) si possible
+- [x] Bonus monitoring (Prometheus + Grafana, dashboard 5 panels auto-provisionné)
 
 ---
 
-**Mise à jour :** 2026-04-28 — Phases 1-7 ✅  
-**Prochaine :** Phase 8 (Bonus — Monitoring / Dashboard, optionnel)
+**Mise à jour :** 2026-05-19 — Phases 1-8 ✅  
+**Prêt pour la soutenance.**
 
 ### Phase 5 : star schema final dans Snowflake (`TMDB_DW.MARTS`)
 
