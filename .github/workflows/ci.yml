@@ -43,8 +43,23 @@ jobs:
 
       - name: Parse Airflow DAG
         env:
+          # Dummy values pour satisfaire les os.environ[...] lus au module-level
+          # (les tasks ne sont pas exécutées, juste le DAG parsé)
           PROJECT_HOST_PATH: /tmp/ci-dummy
           DOCKER_NETWORK: ci_default
+          TMDB_API_KEY: ci-dummy
+          TMDB_MAX_PAGES: "1"
+          MINIO_ENDPOINT: http://ci-dummy:9000
+          MINIO_ACCESS_KEY: ci-dummy
+          MINIO_SECRET_KEY: ci-dummy
+          MINIO_BUCKET: ci-dummy
+          SNOWFLAKE_ACCOUNT: ci-dummy
+          SNOWFLAKE_USER: ci-dummy
+          SNOWFLAKE_PRIVATE_KEY_PATH: /tmp/ci-dummy.p8
+          SNOWFLAKE_DATABASE: TMDB_DW
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: COMPUTE_WH
+          SNOWFLAKE_ROLE: PIPELINE_ROLE
           AIRFLOW__CORE__LOAD_EXAMPLES: "false"
           AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
           PYTHONPATH: ${{ github.workspace }}
