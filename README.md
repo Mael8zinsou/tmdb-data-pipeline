@@ -11,7 +11,6 @@
 >
 > Projet final M2 Data Engineer · YNOV · Maël Zinsou · 2026
 
----
 
 ## ✨ Ce que fait ce projet
 
@@ -27,7 +26,6 @@ Une pipeline complète qui démontre l'ensemble du cycle de vie de la donnée, d
 | **CI GitHub Actions** | ~1 min (ruff + DAG parse + dbt parse) |
 | **Métriques exposées** | ~80 métriques Airflow temps réel |
 
----
 
 ## 🏗️ Architecture
 
@@ -75,7 +73,6 @@ Une pipeline complète qui démontre l'ensemble du cycle de vie de la donnée, d
 
 > Architecture détaillée + diagramme de flux + modèle de données : [`doc.md`](doc.md).
 
----
 
 ## 🛠️ Stack technologique
 
@@ -91,9 +88,8 @@ Une pipeline complète qui démontre l'ensemble du cycle de vie de la donnée, d
 | **Infra** | Docker Compose v2 | 7 services en une commande |
 | **CI** | GitHub Actions | Ruff lint + Airflow DAG parse + dbt parse |
 
----
 
-## 📊 Modèle de données — Star schema
+## 📊 Modèle de données - Star schema
 
 ```
               fct_movies (60)
@@ -109,11 +105,10 @@ Une pipeline complète qui démontre l'ensemble du cycle de vie de la donnée, d
 
 Star schema classique avec un pont N-N (`bridge_movie_genre`) pour la relation films ↔ genres. Modélisé en DBT (`marts/`), matérialisé en tables Snowflake, testé automatiquement.
 
----
 
 ## 📈 Monitoring temps réel
 
-Dashboard Grafana **auto-provisionné** au démarrage de la stack — aucune config manuelle :
+Dashboard Grafana **auto-provisionné** au démarrage de la stack - aucune config manuelle :
 
 | Panel | Métrique sous-jacente |
 |---|---|
@@ -127,11 +122,10 @@ Chaîne : Airflow émet en StatsD (UDP 9125) → `statsd-exporter` traduit en Pr
 
 > Accès : http://localhost:3000 (admin / admin) après `docker compose up -d`.
 
----
 
 ## 🎯 Décisions techniques notables
 
-7 décisions qui ont structuré le projet — un résumé honnête des trade-offs :
+7 décisions qui ont structuré le projet - un résumé honnête des trade-offs :
 
 | Décision | Pourquoi |
 |---|---|
@@ -145,7 +139,6 @@ Chaîne : Airflow émet en StatsD (UDP 9125) → `statsd-exporter` traduit en Pr
 
 > 12 décisions détaillées (avec le *pourquoi* approfondi) : [`doc.md`](doc.md#10-approfondissement--décisions-techniques-détaillées).
 
----
 
 ## 🚀 Quick start
 
@@ -177,25 +170,24 @@ Services exposés une fois la stack démarrée :
 | Airflow UI | http://localhost:8080 | admin / admin |
 | MinIO console | http://localhost:9001 | minioadmin / minioadmin |
 | Grafana | http://localhost:3000 | admin / admin |
-| Prometheus | http://localhost:9090 | — |
+| Prometheus | http://localhost:9090 | - |
 
 **Déclencher la pipeline** : http://localhost:8080 → `tmdb_pipeline` → toggle ON → ▶ Trigger.
 
 > Setup détaillé pas-à-pas : [`key_command.md`](key_command.md#3-setup-initial-one-time).
 
----
 
 ## 📂 Structure du projet (vue haute)
 
 ```
 Final pipeline v1/
-├── ingestion/         Phase 1  — Extraction TMDB → Parquet
-├── spark/             Phases 2-3 — Staging + Curated (PySpark)
-├── snowflake_load/    Phase 4  — COPY INTO Snowflake
-├── dbt/               Phase 5  — Star schema + 51 tests
-├── dags/              Phase 6  — DAG Airflow (8 tasks)
-├── monitoring/        Phase 8  — Prometheus + Grafana provisioning
-├── .github/workflows/ CI       — ruff + DAG parse + dbt parse
+├── ingestion/         Phase 1  - Extraction TMDB → Parquet
+├── spark/             Phases 2-3 - Staging + Curated (PySpark)
+├── snowflake_load/    Phase 4  - COPY INTO Snowflake
+├── dbt/               Phase 5  - Star schema + 51 tests
+├── dags/              Phase 6  - DAG Airflow (8 tasks)
+├── monitoring/        Phase 8  - Prometheus + Grafana provisioning
+├── .github/workflows/ CI       - ruff + DAG parse + dbt parse
 ├── doc.md             Documentation technique exhaustive
 ├── key_command.md     Runbook opérationnel (commandes, debug, reset)
 └── notice_démo.md     Script de la démo soutenance
@@ -203,7 +195,6 @@ Final pipeline v1/
 
 > Arborescence complète détaillée : [`doc.md`](doc.md#3-structure-du-projet).
 
----
 
 ## Tests & qualité
 
@@ -212,9 +203,8 @@ Final pipeline v1/
 - **Pipeline idempotente** : ré-exécutable sur la même date sans duplication (partitions MinIO par `ingestion_date`, `TRUNCATE` Snowflake, `CREATE OR REPLACE` DBT).
 - **Secrets jamais committés** : `.env`, clés RSA, `target/`, `dbt_packages/` tous gitignored.
 
----
 
-## Roadmap — Améliorations possibles
+## Roadmap - Améliorations possibles
 
 | Court terme | Impact |
 |---|---|
@@ -235,7 +225,6 @@ Final pipeline v1/
 | Secrets manager (Vault / AWS Secrets Manager) | Sécurité production |
 | CDC / streaming (Kafka + Debezium) pour ingestion incrémentale | Vraie pipeline temps réel |
 
----
 
 ## 📚 Documentation
 
@@ -247,16 +236,10 @@ Trois documents complémentaires selon l'usage :
 | [`key_command.md`](key_command.md) | Runbook opérationnel | Reproduire, exploiter, debugger |
 | [`notice_démo.md`](notice_démo.md) | Script démo soutenance | Préparation et déroulé de la présentation |
 
----
 
 ## 🎓 Contexte académique
 
 Projet final du Master 2 Data Engineer, **YNOV**, dans le cadre du module *Stockage et Traitement des Données Distribuées*. L'objectif pédagogique : concevoir une pipeline data réaliste mobilisant l'ensemble du stack moderne (orchestration, data lake, distributed processing, warehouse, transformations SQL versionnées, observabilité).
 
-**Auteur :** Maël Zinsou
-**Date de soutenance :** 2026-05-19
-**Repo :** https://github.com/Mael8zinsou/tmdb-data-pipeline
-
----
-
-> 💡 *Ce projet est conçu comme un *showcase* end-to-end, pas un produit fini. Il met l'accent sur la qualité du code, la documentation, et la cohérence d'ensemble — plutôt que sur l'exhaustivité du périmètre fonctionnel.*
+**Auteur :** Maël Zinsou -
+**Contact :** - [maelzinsou@proton.me](mailto:maelzinsou@proton.me) - [LinkedIn](https://www.linkedin.com/in/mael-mike-zinsou-data-engineer/)
