@@ -234,7 +234,6 @@ Trois documents complémentaires selon l'usage :
 |---|---|---|
 | [`doc.md`](doc.md) | Documentation technique exhaustive | Comprendre les décisions, l'archi, les phases |
 | [`key_command.md`](key_command.md) | Runbook opérationnel | Reproduire, exploiter, debugger |
-| [`notice_démo.md`](notice_démo.md) | Script démo soutenance | Préparation et déroulé de la présentation |
 
 
 ## 🎓 Contexte académique

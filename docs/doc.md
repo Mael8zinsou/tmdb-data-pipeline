@@ -6,7 +6,7 @@
 **Repo public :** https://github.com/Mael8zinsou/tmdb-data-pipeline
 **Statut :** Phases 1-8 complètes, CI verte.
 
----
+
 
 ## Table des matières
 
@@ -22,7 +22,7 @@
 10. [Approfondissement — décisions techniques détaillées](#10-approfondissement--décisions-techniques-détaillées)
 11. [Limitations & travaux futurs](#11-limitations--travaux-futurs)
 
----
+
 
 ## 1. Contexte
 
@@ -59,7 +59,6 @@ Concevoir et implémenter une **pipeline de données distribuée complète** res
 - **CI GitHub Actions** : ruff lint + Airflow DAG parse + dbt parse, exécutée à chaque push sur `main` ou pull request
 - Badge CI affiché en tête du README
 
----
 
 ## 2. Architecture
 
@@ -149,7 +148,6 @@ Schéma final dans `TMDB_DW.MARTS` :
 | `MARTS` | `dim_date`, `dim_genre`, `dim_country`, `dim_language` | tables | Dimensions |
 | `MARTS` | `bridge_movie_genre` | table | Pont N-N films ↔ genres |
 
----
 
 ## 3. Structure du projet
 
@@ -238,7 +236,6 @@ Final pipeline v1/
         └── ci.yml                  CI : ruff + DAG parse + dbt parse
 ```
 
----
 
 ## 4. Configuration & secrets
 
@@ -320,7 +317,6 @@ ALTER USER <USER> SET
   DEFAULT_NAMESPACE = TMDB_DW.RAW;
 ```
 
----
 
 ## 5. Phases de développement
 
@@ -435,7 +431,6 @@ Airflow ─StatsD UDP─► statsd-exporter ─HTTP─► Prometheus ─query─
 
 **Validation** : `airflow_scheduler_heartbeat` rate ≈ 12/min, datasource + dashboard provisionnés au démarrage de Grafana.
 
----
 
 ## 6. Pipeline en production (run réel)
 
@@ -479,7 +474,6 @@ docker exec finalpipelinev1-airflow-scheduler-1 \
 | MARTS | dim_language | 187 |
 | MARTS | bridge_movie_genre | 161 |
 
----
 
 ## 7. Tests & qualité
 
@@ -518,7 +512,6 @@ Re-jouable à l'identique pour une même date d'ingestion :
 
 Pipeline déclenchée 3 fois successives sur la même date, résultats finaux identiques (vérifié `SELECT COUNT(*)` sur tables MARTS).
 
----
 
 ## 8. Monitoring & observabilité
 
@@ -550,7 +543,6 @@ Pipeline déclenchée 3 fois successives sur la même date, résultats finaux id
 - `airflow_task_duration_seconds{dag_id="...", task_id="..."}` (avec labels)
 - `airflow_dag_processing_*` : import errors, file path queue, last duration
 
----
 
 ## 9. Approfondissement — décisions techniques détaillées
 
@@ -638,7 +630,6 @@ Cette section regroupe le *pourquoi* derrière les choix non-évidents, et les p
 
 **Solution** : pour valider un DAG, **toujours trigger depuis l'UI** (ou via `airflow dags trigger`, qui passe par le scheduler) — c'est le seul chemin qui reproduit l'environnement de prod.
 
----
 
 ## 10. Limitations & travaux futurs
 
@@ -651,8 +642,3 @@ Cette section regroupe le *pourquoi* derrière les choix non-évidents, et les p
 | MinIO local | Non-distribué, non-prod-ready | Migrer vers S3/GCS pour le cloud |
 | Pas de data viz | Star schema sous-exploité | Brancher Metabase / Superset / Power BI sur MARTS |
 | Pipeline manuelle (`schedule=None`) | Pas d'ingestion auto | Activer `schedule="@daily"` une fois en prod |
-
----
-
-**Dernière mise à jour :** 2026-05-19
-**Statut :** Phases 1-8 complètes, CI verte
