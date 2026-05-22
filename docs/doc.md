@@ -2,9 +2,7 @@
 
 **Auteur :** Maël Zinsou
 **Projet :** M2 Data Engineer · YNOV · *Stockage et Traitement des Données Distribuées*
-**Soutenance :** 2026-05-19
 **Repo public :** https://github.com/Mael8zinsou/tmdb-data-pipeline
-**Statut :** Phases 1-8 complètes, CI verte.
 
 
 
