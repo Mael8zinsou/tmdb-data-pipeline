@@ -71,7 +71,7 @@ Une pipeline complète qui démontre l'ensemble du cycle de vie de la donnée, d
          └─────────────────────────────────────────────────────────────────────┘
 ```
 
-> Architecture détaillée + diagramme de flux + modèle de données : [`doc.md`](doc.md).
+> Architecture détaillée + diagramme de flux + modèle de données : [`doc.md`](docs/doc.md).
 
 
 ## 🛠️ Stack technologique
@@ -137,7 +137,7 @@ Chaîne : Airflow émet en StatsD (UDP 9125) → `statsd-exporter` traduit en Pr
 | **`dbt_utils.date_spine` pour `dim_date`** | Snowflake `GENERATOR(rowcount =>)` exige un littéral constant |
 | **StatsD intermédiaire** | Airflow émet nativement en StatsD, pas en Prometheus → `statsd-exporter` traduit avec labels |
 
-> 12 décisions détaillées (avec le *pourquoi* approfondi) : [`doc.md`](doc.md#10-approfondissement--décisions-techniques-détaillées).
+> 12 décisions détaillées (avec le *pourquoi* approfondi) : [`doc.md`](docs/doc.md#10-approfondissement--décisions-techniques-détaillées).
 
 
 ## 🚀 Quick start
@@ -174,7 +174,7 @@ Services exposés une fois la stack démarrée :
 
 **Déclencher la pipeline** : http://localhost:8080 → `tmdb_pipeline` → toggle ON → ▶ Trigger.
 
-> Setup détaillé pas-à-pas : [`key_command.md`](key_command.md#3-setup-initial-one-time).
+> Setup détaillé pas-à-pas : [`key_command.md`](docs/key_command.md#3-setup-initial-one-time).
 
 
 ## 📂 Structure du projet (vue haute)
@@ -193,7 +193,7 @@ Final pipeline v1/
 └── notice_démo.md     Script de la démo soutenance
 ```
 
-> Arborescence complète détaillée : [`doc.md`](doc.md#3-structure-du-projet).
+> Arborescence complète détaillée : [`doc.md`](docs/doc.md#3-structure-du-projet).
 
 
 ## Tests & qualité
@@ -232,8 +232,9 @@ Trois documents complémentaires selon l'usage :
 
 | Document | Pour quoi | Quand le consulter |
 |---|---|---|
-| [`doc.md`](doc.md) | Documentation technique exhaustive | Comprendre les décisions, l'archi, les phases |
-| [`key_command.md`](key_command.md) | Runbook opérationnel | Reproduire, exploiter, debugger |
+| [`doc.md`](docs/doc.md) | Documentation technique exhaustive | Comprendre les décisions, l'archi, les phases |
+| [`key_command.md`](docs/key_command.md) | Runbook opérationnel | Reproduire, exploiter, debugger |
+| [`pour_les_nuls.md`](docs/pour_les_nuls.md) | Vulgarisation sans jargon | Découvrir le projet sans prérequis technique |
 
 
 ## 🎓 Contexte académique

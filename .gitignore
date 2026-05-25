@@ -61,9 +61,12 @@ Thumbs.db
 *.jar
 *.zip
 *.tar.gz
+*.rar
 
 # ─── Spécifique projet ────────────────────────────────────────────────────────
-# Sujet PDF (référence personnelle, pas pour le repo public)
+# Documents personnels / livrables hors repo public
 Projet final*.pdf
+Documentation_TMDB_Pipeline.pdf
 Lien Github.txt
 presentation/
+script_soutenance.md
